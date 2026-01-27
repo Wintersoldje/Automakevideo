@@ -15,7 +15,7 @@ body {
 }
 
 .container {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 48px 24px 64px;
 }
@@ -31,7 +31,8 @@ header h1 {
 }
 
 header p {
-  margin: 0;
+  margin: 0 auto;
+  max-width: 720px;
   color: #4b5563;
 }
 
@@ -72,11 +73,30 @@ button:not(:disabled):hover {
   box-shadow: 0 10px 20px rgba(37, 99, 235, 0.25);
 }
 
+.status {
+  margin: 0 auto 28px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1e40af;
+  text-align: center;
+  font-weight: 600;
+}
+
+.status[data-tone="success"] {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.status[data-tone="error"] {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
 .script-grid {
   display: grid;
   gap: 20px;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  margin-bottom: 24px;
 }
 
 .script-card {
@@ -89,6 +109,12 @@ button:not(:disabled):hover {
 .script-card h2 {
   font-size: 18px;
   margin: 0 0 12px;
+}
+
+.script-card h3 {
+  font-size: 15px;
+  margin: 16px 0 8px;
+  color: #475569;
 }
 
 textarea {
