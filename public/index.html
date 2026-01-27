@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NEWNEEK 자동화 영상 생성</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <h1>NEWNEEK 데일리 자동화</h1>
+        <p>
+          오늘 도착한 NEWNEEK 데일리를 기반으로 대본, 음성, 이미지,
+          자막이 포함된 숏폼·롱폼 영상을 생성합니다.
+        </p>
+      </header>
+
+      <section class="panel">
+        <div class="button-row">
+          <button id="generateScript">대본 생성</button>
+          <button id="saveScript" disabled>대본 TXT 저장</button>
+        </div>
+
+        <div class="button-row">
+          <button id="saveShortVideo" disabled>숏폼 MP4 저장</button>
+          <button id="saveLongVideo" disabled>롱폼 MP4 저장</button>
+        </div>
+
+        <div class="status" id="status">대본 생성을 눌러 시작하세요.</div>
+
+        <div class="script-grid">
+          <div class="script-card">
+            <h2>숏폼 대본</h2>
+            <textarea id="shortScript" rows="8" readonly></textarea>
+            <h3>숏폼 자막용 라인브레이크</h3>
+            <textarea id="shortCaptions" rows="10" readonly></textarea>
+          </div>
+          <div class="script-card">
+            <h2>롱폼 대본</h2>
+            <textarea id="longScript" rows="12" readonly></textarea>
+            <h3>롱폼 자막용 라인브레이크</h3>
+            <textarea id="longCaptions" rows="12" readonly></textarea>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
