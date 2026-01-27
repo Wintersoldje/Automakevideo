@@ -1,0 +1,17 @@
+{
+  "name": "newneek-automation",
+  "version": "0.1.0",
+  "description": "NEWNEEK daily automation demo",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "auth:gmail": "node scripts/gmail-auth.js"
+  },
+  "dependencies": {
+    "@google-cloud/text-to-speech": "^5.4.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "googleapis": "^133.0.0"
+  }
+}
