@@ -1,82 +1,241 @@
-# NEWNEEK 데일리 자동화 (대본/음성/자막/MP4)
+# Economic News → YouTube Automation (KST 07:00 Daily)
 
-오늘 도착한 NEWNEEK 데일리 메일을 읽어 **숏폼/롱폼 대본과 자막, TTS 음성, 이미지 슬라이드, 자막 번인 mp4**를 자동 생성하는 웹 프로젝트입니다.
+A production-oriented Python automation pipeline that, every day at **07:00 Asia/Seoul**, does the following:
 
-## 주요 기능
-- Gmail에서 오늘 도착한 NEWNEEK 데일리 메일 1건을 읽어 핵심 뉴스 3개 추출
-- 숏폼(1분 이내) / 롱폼(5~6분) 대본 생성 + 자막용 라인브레이크 버전 생성
-- Google Cloud TTS로 음성 생성
-- Pexels 이미지 3장(실패 시 ffmpeg 컬러 배경 fallback) 수집
-- ffmpeg로 이미지 슬라이드 + 음성 + drawtext 자막 번인 mp4 생성
+1. Collects major economic news.
+2. Strictly keeps only articles published on **today or yesterday (KST)**.
+3. Ranks and summarizes key stories in Korean.
+4. Generates two videos from the same story set:
+   - **YouTube Shorts** (`1080x1920`, <60s target)
+   - **Long-form YouTube** (`1920x1080`, 5–10 min target)
+5. Uploads both to YouTube automatically.
+6. Stores full source/audit logs and artifacts.
 
-## 사전 준비
-- Node.js 18 이상
-- ffmpeg / ffprobe (Homebrew 설치)
-- Google Gmail API OAuth 토큰 발급
-- Google Cloud TTS 서비스 계정
+---
 
-## 설치
-```bash
-npm install
+## 1) Architecture proposal
+
+### Pipeline modules
+
+- `news_fetcher`
+  - `NewsAPIFetcher`: pulls economic stories via NewsAPI (swappable).
+  - `RSSFetcher`: pulls from trusted business RSS feeds (Reuters/CNBC configurable).
+- `date_validator`
+  - Converts publication timestamps to **Asia/Seoul**.
+  - Strictly rejects anything outside `{today, yesterday}` in KST.
+  - Rejects records with unverifiable dates.
+- `story_ranker`
+  - Deduplicates overlapping headlines.
+  - Scores by macro relevance (rates/CPI/employment/markets/policy/earnings).
+- `summarizer`
+  - Provider abstraction:
+    - `ExtractiveSummarizer` (default, no paid dependency)
+    - `OpenAISummarizer` (optional, JSON-schema constrained output)
+- `script_writer`
+  - Builds Korean shorts + long scripts.
+  - Produces `statement_source_map.json` for traceability.
+- `image_manager`
+  - Optional Pexels adapter.
+  - Fallback template images if story-specific visuals unavailable.
+- `tts_generator`
+  - TTS provider abstraction (`gtts` default; easy to extend).
+- `video_builder`
+  - ffmpeg concat + scale/pad for shorts/long formats.
+- `youtube_uploader`
+  - Uses YouTube Data API v3 OAuth.
+  - Uploads shorts + long-form; captures URL/status.
+- `source_logger`
+  - JSON + readable logs:
+    - selected/rejected stories
+    - rejection reasons
+    - scripts and source map
+    - upload status and errors
+- `scheduler`
+  - Continuous daily scheduler for 07:00 KST.
+
+---
+
+## 2) Project structure
+
+```text
+.
+├── .env.example
+├── pyproject.toml
+├── requirements.txt
+├── README.md
+├── scripts/
+│   └── run_daily.sh
+├── examples/
+│   └── source_log_example.json
+└── src/econ_video_automation/
+    ├── __init__.py
+    ├── config.py
+    ├── models.py
+    ├── main.py
+    ├── pipeline.py
+    ├── scheduler.py
+    ├── date_validator.py
+    ├── story_ranker.py
+    ├── script_writer.py
+    ├── image_manager.py
+    ├── tts_generator.py
+    ├── video_builder.py
+    ├── youtube_uploader.py
+    ├── source_logger.py
+    ├── news_fetcher/
+    │   ├── base.py
+    │   ├── newsapi_fetcher.py
+    │   └── rss_fetcher.py
+    ├── summarizer/
+    │   ├── base.py
+    │   ├── extractive.py
+    │   └── openai_summarizer.py
+    └── utils/
+        ├── retry.py
+        └── timezone.py
 ```
 
-## 환경 변수
-`.env` 파일을 만들어 다음 값을 설정하세요.
+---
+
+## 3) Setup
+
+### Requirements
+- Python 3.11+
+- `ffmpeg` in PATH
+
+### Install
 
 ```bash
-# Gmail OAuth
-GMAIL_CREDENTIALS_JSON='{"installed":{...}}'
-GMAIL_TOKEN_JSON='{"access_token":"...","refresh_token":"..."}'
-
-# Google Cloud TTS 서비스 계정 JSON
-GCP_TTS_SA_JSON='{"type":"service_account",...}'
-
-# Pexels API
-PEXELS_API_KEY="your_pexels_key"
-
-# ffmpeg 경로 (macOS Homebrew 기준)
-FFMPEG_PATH=/usr/local/bin/ffmpeg
-FFPROBE_PATH=/usr/local/bin/ffprobe
-
-# 한글 폰트 경로
-FONT_PATH=/System/Library/Fonts/AppleSDGothicNeo.ttc
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
 ```
 
-- credentials/token을 파일로 저장하고 싶다면 `secrets/gmail_credentials.json`, `secrets/gmail_token.json`를 사용해도 됩니다.
+### Configure environment
 
-## 실행
 ```bash
-npm run dev
+cp .env.example .env
+# then edit .env
 ```
 
-브라우저에서 `http://localhost:3000`에 접속하세요.
+You must fill:
+- `NEWSAPI_KEY` (if using NewsAPI)
+- `YOUTUBE_CLIENT_SECRET_FILE`, `YOUTUBE_TOKEN_FILE`
+- Optional: `OPENAI_API_KEY`, `PEXELS_API_KEY`
 
-## 버튼 동작 확인 방법
-1. **대본 생성**: Gmail에서 오늘 NEWNEEK 데일리를 읽고 숏폼/롱폼 대본 및 자막 라인브레이크를 화면에 표시합니다.
-2. **대본 TXT 저장**: `short_script_YYYYMMDD.txt`, `long_script_YYYYMMDD.txt` 두 파일을 다운로드합니다.
-3. **숏폼 MP4 저장**: 숏폼 영상 렌더링 후 `YYYYMMDD_SHORT.mp4` 다운로드.
-4. **롱폼 MP4 저장**: 롱폼 영상 렌더링 후 `YYYYMMDD_LONG.mp4` 다운로드.
+---
 
-## API 요약
-- `GET /api/script/today`
-- `GET /api/script/today/download?type=short|long`
-- `POST /api/render?type=short|long`
-- `GET /api/render/download?type=short|long`
+## 4) Run
 
-## ffmpeg drawtext 필터 체크
-- 렌더링 시작 시 `ffmpeg -filters` 출력에서 drawtext 필터 유무를 확인합니다.
-- drawtext가 없으면 다음과 같은 에러 메시지를 반환합니다.
-  - `ffmpeg drawtext 필터가 없습니다. ffmpeg 빌드 옵션을 확인하거나 drawtext 지원 버전을 설치해 주세요.`
+### Single run
 
-## 출력 파일 규칙
-- `out/YYYYMMDD_short_script.txt`
-- `out/YYYYMMDD_long_script.txt`
-- `out/YYYYMMDD_SHORT.mp4`
-- `out/YYYYMMDD_LONG.mp4`
+```bash
+python -m econ_video_automation.main --once
+```
 
-## 캐싱
-- 같은 날짜로 요청하면 `out/YYYYMMDD` 폴더의 결과를 재사용합니다.
+### Scheduler mode
 
-## 참고
-- subtitles 필터를 사용하지 않고 **drawtext로 자막 번인**을 기본값으로 처리했습니다.
-- 대본은 특수문자와 이모지를 최소화했습니다.
+```bash
+python -m econ_video_automation.main --schedule
+```
+
+Default schedule is **07:00 KST** from `.env`:
+- `KST_TIMEZONE=Asia/Seoul`
+- `RUN_TIME_KST=07:00`
+
+---
+
+## 5) Cron deployment (recommended)
+
+Because cron itself runs in server local time, set timezone explicitly:
+
+```cron
+# Run every day at 07:00 Asia/Seoul
+CRON_TZ=Asia/Seoul
+0 7 * * * /workspace/Automakevideo/scripts/run_daily.sh >> /workspace/Automakevideo/cron.log 2>&1
+```
+
+---
+
+## 6) Strict date filtering policy (critical)
+
+At runtime:
+1. Current datetime is read in `Asia/Seoul`.
+2. Every article publication timestamp is normalized to `Asia/Seoul`.
+3. Only if `pub_date in {today_kst, yesterday_kst}` the article is kept.
+4. Missing/unparseable dates are rejected.
+5. Anything older than yesterday is rejected and logged (`too_old_or_out_of_range`).
+
+---
+
+## 7) Output artifacts (per run)
+
+Each run creates:
+
+```text
+outputs/YYYY-MM-DD/YYYYMMDD_HHMMSS/
+├── audio/
+│   ├── shorts.mp3
+│   └── long.mp3
+├── images/
+├── scripts/
+│   ├── shorts_script.txt
+│   └── long_script.txt
+├── videos/
+│   ├── shorts.mp4
+│   └── long.mp4
+└── logs/
+    ├── selected_articles.json
+    ├── rejected_articles.json
+    ├── statement_source_map.json
+    ├── run_summary.json
+    └── run_summary.txt
+```
+
+---
+
+## 8) YouTube metadata
+
+Generated automatically:
+- title
+- description (includes digest date, disclaimer, source credits)
+- hashtags/tags
+
+Upload result captures:
+- status
+- video ID
+- video URL
+- errors (if any)
+
+---
+
+## 9) Swappable paid/free providers
+
+Designed with adapters so providers can be replaced:
+- Summarizer: `extractive` ↔ `openai`
+- Images: `none`/fallback ↔ `pexels`
+- TTS: `gtts` (default) with extension point for cloud providers
+- News: NewsAPI and RSS combined; can add GDELT/Serp/other connectors
+
+---
+
+## 10) Credentials and security notes
+
+Never commit real keys/tokens.
+Store:
+- YouTube OAuth secret JSON in `secrets/`
+- token JSON in `secrets/` (auto-written after first auth)
+- API keys in `.env`
+
+Use server secret manager (GCP Secret Manager, AWS Secrets Manager, etc.) for production.
+
+---
+
+## 11) Example source log format
+
+See:
+- `examples/source_log_example.json`
+
+This includes per-story source metadata, rejected reasons, upload URLs, and errors.
+
